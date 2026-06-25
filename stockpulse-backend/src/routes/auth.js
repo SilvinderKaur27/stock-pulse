@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const pool = require('../db');
 const router = express.Router();
 
@@ -36,5 +37,44 @@ router.post('/register', async(req, res)=> {
 
 
 });
+
+router.post('/login', async (req, res)=> { 
+    try {
+    const { email, password } = req.body;
+    const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email])
+    const user = result.rows[0];
+
+    if(!user) {
+        return res.status(401).json({
+            message: "Email not registered"
+        })
+    }
+
+    const isMatch = await bcrypt.compare(
+        password,
+        user.password_hash
+    )
+
+    if(!isMatch) {
+        return res.status(401).json({
+            message: "Invalid credentials"
+        })
+    }
+
+    const token = jwt.sign(
+        { id: user.id }, 
+        process.env.JWT_SECRET,
+        { expiresIn: "1h"}
+    )
+
+    res.json({ 
+        token
+})
+    } catch(error) {
+        res.status(500).json({
+            message: error.message
+        })
+    }
+})
 
 module.exports = router;
