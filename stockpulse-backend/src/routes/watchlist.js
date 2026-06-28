@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const pool = require("../db");
 const auth = require("../middleware/auth");
+const redis = require("../redis");
 const router = express.Router();
 
 router.post("/", auth, async (req, res) => {
@@ -96,24 +97,21 @@ router.get("/", auth, async (req, res) => {
 
         const watchlist = await Promise.all(
             result.rows.map(async (stock) => {
-                const response = await axios.get(
-                    "https://www.alphavantage.co/query",
-                    {
-                        params: {
-                            function: "GLOBAL_QUOTE",
-                            symbol: stock.stock_ticker,
-                            apikey: process.env.ALPHA_VANTAGE_API_KEY
-                        }
-                    }
+                const cached = await redis.get(
+                    `price:${stock.stock_ticker}`
                 );
 
-                const quote = response.data["Global Quote"];
+                if (!cached) {
+                    return null;
+                }
 
-                return quote;
+
+                return JSON.parse(cached);
 
             })
         )
-        res.json(watchlist);
+
+        res.json(watchlist.filter(Boolean));
 
     } catch (error) {
         res.status(500).json({
